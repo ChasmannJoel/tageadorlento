@@ -161,11 +161,22 @@ const chatObserver = {
                 if (indiceExistente !== -1) {
                   const codigoExistente = codigos[indiceExistente];
                   
-                  // Si existe con diferente signo, reemplazar
+                  // Si existe con diferente signo, solo reemplazar si el NUEVO tiene ! y el viejo NO
                   if (codigoExistente !== nomenclatura) {
-                    console.log(`🔄 [Observer] Reemplazando "${codigoExistente}" por "${nomenclatura}"`);
-                    codigos[indiceExistente] = nomenclatura;
-                    huboModificaciones = true;
+                    const viejoTieneSigno = codigoExistente.endsWith('!');
+                    const nuevoTieneSigno = nomenclatura.endsWith('!');
+                    
+                    if (nuevoTieneSigno && !viejoTieneSigno) {
+                      // CORRECTO: Actualizar de 13-12-35A → 13-12-35A!
+                      console.log(`🔄 [Observer] Actualizando con carga: "${codigoExistente}" → "${nomenclatura}"`);
+                      codigos[indiceExistente] = nomenclatura;
+                      huboModificaciones = true;
+                    } else if (!nuevoTieneSigno && viejoTieneSigno) {
+                      // INCORRECTO: NO quitar el signo si ya está
+                      console.log(`⚠️ [Observer] "${codigoExistente}" ya tiene carga, NO se quita el signo`);
+                    } else {
+                      console.log(`✅ [Observer] "${nomenclatura}" ya existe correctamente`);
+                    }
                   } else {
                     console.log(`✅ [Observer] "${nomenclatura}" ya existe correctamente`);
                   }
