@@ -29,12 +29,13 @@ let PANELES_CONFIG = [
 const PANELES_API_URL = 'http://148.230.72.182:3066/paneles?secret=tu_clave_super_secreta';
 
 const urlDetector = {
-  panelesCache: null, // Cache de paneles de la API
+  panelesCache: null, // Cache SOLO en memoria de la API
   cacheTimestamp: null, // Timestamp del último cargue
   CACHE_DURATION: 5 * 60 * 1000, // 5 minutos de duración de cache
   
   /**
    * Carga los paneles desde la API SIEMPRE (cada 5 minutos máximo)
+   * NO usa localStorage, SOLO cache en memoria
    * @returns {Promise<Array>}
    */
   async cargarPanelesDesdeAPI() {
@@ -43,12 +44,12 @@ const urlDetector = {
     // Si el cache es reciente (menos de 5 minutos), reutilizalo
     if (this.panelesCache && this.cacheTimestamp && 
         (ahora - this.cacheTimestamp) < this.CACHE_DURATION) {
-      console.log('📦 Usando cache de paneles (reciente)');
+      console.log('📦 Usando cache en memoria de paneles (reciente)');
       return this.panelesCache;
     }
     
     try {
-      console.log('🔄 Consultando API de paneles...');
+      console.log('🔄 Consultando API de paneles (http://148.230.72.182:3066/paneles)...');
       const response = await fetch(PANELES_API_URL);
       
       if (!response.ok) {
@@ -60,12 +61,13 @@ const urlDetector = {
       // Transformar formato de API a formato interno
       // La API devuelve: {ok: true, paneles: [{id: 10, nombre: "Goatgaming2"}, ...]}
       if (data.ok && data.paneles && Array.isArray(data.paneles)) {
+        // Crear nuevo formato con cada panel como un objeto individual
         this.panelesCache = data.paneles.map(p => ({
           id: p.id,
           nombres: [p.nombre]
         }));
         this.cacheTimestamp = ahora; // Actualiza timestamp del cache
-        console.log(`✅ ${this.panelesCache.length} paneles actualizados desde API`);
+        console.log(`✅ ${this.panelesCache.length} paneles actualizados desde API (sin localStorage)`);
         return this.panelesCache;
       }
       
@@ -73,7 +75,7 @@ const urlDetector = {
       return this.panelesCache || []; // Usa cache anterior si falla
     } catch (error) {
       console.error('❌ Error consultando API de paneles:', error);
-      console.log('⚠️ Usando cache anterior como fallback');
+      console.log('⚠️ Usando cache anterior como fallback (sin localStorage)');
       return this.panelesCache || []; // Usa cache anterior si falla la conexión
     }
   },
