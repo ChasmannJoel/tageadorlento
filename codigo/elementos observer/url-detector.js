@@ -30,19 +30,25 @@ const PANELES_API_URL = 'http://148.230.72.182:3066/paneles?secret=tu_clave_supe
 
 const urlDetector = {
   panelesCache: null, // Cache de paneles de la API
-  cacheCargado: false,
+  cacheTimestamp: null, // Timestamp del último cargue
+  CACHE_DURATION: 5 * 60 * 1000, // 5 minutos de duración de cache
   
   /**
-   * Carga los paneles desde la API y los cachea
+   * Carga los paneles desde la API SIEMPRE (cada 5 minutos máximo)
    * @returns {Promise<Array>}
    */
   async cargarPanelesDesdeAPI() {
-    if (this.cacheCargado && this.panelesCache) {
+    const ahora = Date.now();
+    
+    // Si el cache es reciente (menos de 5 minutos), reutilizalo
+    if (this.panelesCache && this.cacheTimestamp && 
+        (ahora - this.cacheTimestamp) < this.CACHE_DURATION) {
+      console.log('📦 Usando cache de paneles (reciente)');
       return this.panelesCache;
     }
     
     try {
-      console.log('🔄 Cargando paneles desde API...');
+      console.log('🔄 Consultando API de paneles...');
       const response = await fetch(PANELES_API_URL);
       
       if (!response.ok) {
@@ -58,48 +64,48 @@ const urlDetector = {
           id: p.id,
           nombres: [p.nombre]
         }));
-        this.cacheCargado = true;
-        console.log(`✅ ${this.panelesCache.length} paneles cargados desde API`);
+        this.cacheTimestamp = ahora; // Actualiza timestamp del cache
+        console.log(`✅ ${this.panelesCache.length} paneles actualizados desde API`);
         return this.panelesCache;
       }
       
       console.warn('⚠️ Formato de respuesta inesperado de la API');
-      return [];
+      return this.panelesCache || []; // Usa cache anterior si falla
     } catch (error) {
-      console.error('❌ Error cargando paneles desde API:', error);
-      return [];
+      console.error('❌ Error consultando API de paneles:', error);
+      console.log('⚠️ Usando cache anterior como fallback');
+      return this.panelesCache || []; // Usa cache anterior si falla la conexión
     }
   },
   
   /**
-   * Busca un panel por nombre en la configuración local y en la API
+   * Busca un panel por nombre consultando SIEMPRE la API
    * @param {string} nombreNormalizado - Nombre del panel normalizado
    * @returns {Promise<Object|null>} {id, nombre} o null si no se encuentra
    */
   async buscarPanelPorNombre(nombreNormalizado) {
-    // 1. Buscar primero en configuración local
-    for (const panel of PANELES_CONFIG) {
+    // 1. SIEMPRE consultar la API para tener datos actualizados
+    console.log(`🔍 Buscando panel "${nombreNormalizado}"...`);
+    const panelesAPI = await this.cargarPanelesDesdeAPI();
+    
+    // 2. Buscar en los paneles de la API
+    for (const panel of panelesAPI) {
       for (const nombre of panel.nombres) {
         if (nombreNormalizado.toLowerCase().includes(nombre.toLowerCase()) ||
             nombre.toLowerCase().includes(nombreNormalizado.toLowerCase())) {
+          console.log(`✅ Panel encontrado: ${nombre} (ID: ${panel.id})`);
           return { id: panel.id, nombre: nombre };
         }
       }
     }
     
-    // 2. Si no se encuentra, buscar en la API
-    console.log(`🔍 Panel "${nombreNormalizado}" no encontrado localmente, consultando API...`);
-    const panelesAPI = await this.cargarPanelesDesdeAPI();
-    
-    for (const panel of panelesAPI) {
+    // 3. Si no está en API, buscar en configuración local como fallback
+    console.log(`⚠️ Panel no encontrado en API, buscando en configuración local...`);
+    for (const panel of PANELES_CONFIG) {
       for (const nombre of panel.nombres) {
         if (nombreNormalizado.toLowerCase().includes(nombre.toLowerCase()) ||
             nombre.toLowerCase().includes(nombreNormalizado.toLowerCase())) {
-          console.log(`✅ Panel encontrado en API: ${nombre} (ID: ${panel.id})`);
-          
-          // Agregar a la configuración local para futuras búsquedas
-          PANELES_CONFIG.push(panel);
-          
+          console.log(`✅ Panel encontrado localmente: ${nombre} (ID: ${panel.id})`);
           return { id: panel.id, nombre: nombre };
         }
       }
