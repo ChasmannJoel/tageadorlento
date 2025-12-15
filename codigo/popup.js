@@ -1,150 +1,145 @@
-// Estado del popup
+// Estado del popup - solo log de actividades
 const popupState = {
   isRunning: false,
-  chatsProcessed: 0,
-  mapeosGuardados: 0,
-  urlsEsperandoLetra: 0,
-  errores: 0,
-  events: [],
-  maxEvents: 20
+  logEntries: [],
+  maxEntries: 100
 };
 
-// Helper para agregar eventos al log
-function addEvent(message, type = 'info') {
+// Cargar estado desde storage al abrir el popup
+function loadStoredState() {
+  chrome.storage.local.get(['popupState'], (result) => {
+    if (result.popupState) {
+      Object.assign(popupState, result.popupState);
+      updateLogUI();
+    }
+  });
+}
+
+// Guardar estado en storage
+function saveState() {
+  chrome.storage.local.set({ popupState: popupState });
+}
+
+// Agregar entrada al log
+function addLog(message, type = 'info') {
   const now = new Date();
   const time = now.toLocaleTimeString('es-AR', { hour12: false });
   
-  popupState.events.unshift({
+  popupState.logEntries.unshift({
+    time,
     message,
     type,
-    time
+    timestamp: Date.now()
   });
   
-  // Mantener solo los últimos maxEvents
-  if (popupState.events.length > popupState.maxEvents) {
-    popupState.events.pop();
+  // Mantener solo las últimas maxEntries
+  if (popupState.logEntries.length > popupState.maxEntries) {
+    popupState.logEntries.pop();
   }
   
-  // Si es error, incrementar contador
-  if (type === 'error') {
-    popupState.errores++;
-  }
-  
-  updateEventLog();
-  updateStats();
+  updateLogUI();
+  saveState();
 }
 
-// Actualizar log visual
-function updateEventLog() {
-  const eventLog = document.getElementById('eventLog');
-  eventLog.innerHTML = popupState.events.map(event => `
-    <div class="event-item event-${event.type}">
-      <span class="event-time">[${event.time}]</span> ${event.message}
+// Actualizar UI del log
+function updateLogUI() {
+  const logContainer = document.getElementById('logContainer');
+  
+  if (popupState.logEntries.length === 0) {
+    logContainer.innerHTML = '<div class="empty-log">Esperando actividad...</div>';
+    return;
+  }
+  
+  logContainer.innerHTML = popupState.logEntries.map(entry => `
+    <div class="log-entry ${entry.type}">
+      <span style="color: #64748b;">[${entry.time}]</span> ${entry.message}
     </div>
   `).join('');
   
-  // Auto scroll al inicio
-  eventLog.scrollTop = 0;
+  // Scroll al inicio
+  logContainer.scrollTop = 0;
 }
 
-// Actualizar estadísticas
-function updateStats() {
-  document.getElementById('statChats').textContent = popupState.chatsProcessed;
-  document.getElementById('statMapeos').textContent = popupState.mapeosGuardados;
-  document.getElementById('statPausado').textContent = popupState.urlsEsperandoLetra;
-  document.getElementById('statError').textContent = popupState.errores;
-}
-
-// Actualizar estado
-function updateStatus(running, status = null) {
-  const indicator = document.getElementById('statusIndicator');
-  const statusText = document.getElementById('statusText');
-  const btn = document.getElementById('observarChatsBtn');
-  const stopBtn = document.getElementById('detenerChatsBtn');
-  
+// Actualizar estado de botones
+function updateButtonStates(running) {
   popupState.isRunning = running;
-  
-  if (running) {
-    indicator.className = 'status-indicator active';
-    statusText.textContent = status || '🟢 Ejecutándose';
-    btn.disabled = true;
-    stopBtn.disabled = false;
-  } else {
-    indicator.className = 'status-indicator inactive';
-    statusText.textContent = '⚫ Inactivo';
-    btn.disabled = false;
-    stopBtn.disabled = true;
-  }
+  document.getElementById('observarChatsBtn').disabled = running;
+  document.getElementById('detenerChatsBtn').disabled = !running;
+  saveState();
 }
 
+// Click en Iniciar
 document.getElementById("observarChatsBtn").addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   
-  updateStatus(true, '🟢 Iniciando observación...');
-  addEvent('Iniciando observación de chats', 'info');
+  updateButtonStates(true);
+  addLog('🟢 Observador iniciado', 'success');
   
   chrome.tabs.sendMessage(tab.id, { action: "observarChats" });
-  
-  // Abrir monitor automáticamente
-  openMonitor();
 });
 
+// Click en Detener
 document.getElementById("detenerChatsBtn").addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   
-  updateStatus(false);
-  addEvent('Observación detenida por usuario', 'warning');
+  updateButtonStates(false);
+  addLog('⏹️ Observador detenido', 'warning');
   
   chrome.tabs.sendMessage(tab.id, { action: "detenerChats" });
 });
 
-// Abrir monitor en ventana separada
-function openMonitor() {
-  const monitorUrl = chrome.runtime.getURL('codigo/monitor.html');
-  window.open(monitorUrl, 'AutoTagMonitor', 'width=650,height=900,left=100,top=100');
-}
+// Click en Limpiar
+document.getElementById("limpiarHistorialBtn").addEventListener("click", () => {
+  if (confirm('¿Limpiar el historial?')) {
+    popupState.logEntries = [];
+    updateLogUI();
+    addLog('🗑️ Historial limpiado', 'info');
+  }
+});
 
-// Botón para abrir monitor manualmente
-document.getElementById("abrirMonitorBtn")?.addEventListener("click", openMonitor);
-
-// Escuchar mensajes desde el content script
+// Escuchar mensajes desde el content script con actividades
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "popupEvent") {
     const { event, type = 'info', data } = message;
     
     switch(event) {
-      case 'chatProcessed':
-        popupState.chatsProcessed++;
-        addEvent(`Chat procesado ${data.panel || 'desconocido'}`, 'success');
+      case 'scrolling':
+        addLog(`⬇️ Scrolleando chat...`, 'action');
+        break;
+      case 'tagearChat':
+        addLog(`🏷️ Tageando chat en ${data.panel}`, 'action');
         break;
       case 'urlMapped':
-        popupState.mapeosGuardados++;
-        addEvent(`✅ Mapeado: ${data.url} → ${data.letra}`, 'success');
+        addLog(`✅ URL mapeada: ${data.url} → ${data.letra}`, 'success');
         break;
       case 'urlWaiting':
-        popupState.urlsEsperandoLetra++;
-        addEvent(`⏸️ URL esperando letra: ${data.url}`, 'warning');
+        addLog(`⏸️ URL esperando: ${data.url}`, 'warning');
         break;
       case 'observerStarted':
-        updateStatus(true, '🟢 Observación activa');
-        addEvent('Observador iniciado correctamente', 'success');
+        addLog('🟢 Observer iniciado en Clientify', 'success');
+        updateButtonStates(true);
         break;
       case 'observerStopped':
-        updateStatus(false);
-        addEvent('Observador detenido', 'info');
+        addLog('⏹️ Observer detenido', 'warning');
+        updateButtonStates(false);
         break;
       case 'error':
-        addEvent(`❌ Error: ${data.message}`, 'error');
+        addLog(`❌ Error: ${data.message}`, 'error');
         break;
       case 'panelDetected':
-        addEvent(`Panel detectado: ${data.panel}`, 'info');
+        addLog(`📍 Panel detectado: ${data.panel}`, 'info');
+        break;
+      case 'nomemclaturaGenerated':
+        addLog(`📝 Nomenclatura: ${data.value}`, 'success');
         break;
       default:
-        addEvent(event, type);
+        addLog(`${event}`, type);
     }
   }
 });
 
-// Estado inicial
-updateStatus(false);
-addEvent('Panel cargado', 'info');
+// Cargar estado al abrir el popup
+document.addEventListener('DOMContentLoaded', () => {
+  loadStoredState();
+  addLog('Panel cargado', 'info');
+});

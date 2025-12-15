@@ -30,6 +30,16 @@ const chatOpener = {
     let reachedEnd = false;
     const self = this;
     
+    // Enviar evento de scrolleo
+    function sendPopupEvent(event, type = 'info', data = {}) {
+      chrome.runtime.sendMessage({
+        action: 'popupEvent',
+        event,
+        type,
+        data
+      }).catch(err => {});
+    }
+    
     function scrollUntilStopOrEnd() {
       if (self.stopProcess) {
         console.log("⏹️ [AutoTag] Proceso detenido durante el scroll.");
@@ -40,12 +50,15 @@ const chatOpener = {
       
       if (self.hasStopEmoji()) {
         console.log("🛑 Emoji de stop encontrado, deteniendo el scroll. Abriendo todos los chats con emoji 🕐 visibles.");
+        sendPopupEvent('scrolling', 'action', { status: 'stop emoji found' });
         reachedEnd = true;
       } else if (scrollContainer) {
         if (scrollContainer.scrollTop === lastScrollTop && scrollContainer.scrollTop >= scrollContainer.scrollHeight - scrollContainer.clientHeight) {
           console.log("🏁 Fin del scroll detectado. Abriendo todos los chats con emoji 🕐 visibles.");
+          sendPopupEvent('scrolling', 'action', { status: 'end reached' });
           reachedEnd = true;
         } else {
+          sendPopupEvent('scrolling', 'action', { status: 'scrolling' });
           self.scrollChatsContainerToEnd();
           lastScrollTop = scrollContainer.scrollTop;
         }

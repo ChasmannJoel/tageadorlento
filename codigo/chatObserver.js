@@ -63,6 +63,7 @@ const chatObserver = {
             // Si no es de hoy o no tiene nomenclatura, saltar este chat
             if (!urlInfo || !urlInfo.nomenclatura) {
               console.log(`⏭️ [Observer] Chat ${index + 1} saltado (no es de hoy o sin nomenclatura)`);
+              sendPopupEvent('chatSkipped', 'info', { reason: 'no nomenclatura' });
               index++;
               setTimeout(clickNextChat, 2000);
               return;
@@ -73,6 +74,7 @@ const chatObserver = {
             
             const nomenclaturasStr = nomenclaturas.map(n => n.nomenclatura).join(', ');
             console.log(`📋 [Observer] Nomenclaturas generadas: ${nomenclaturasStr}`);
+            sendPopupEvent('nomemclaturaGenerated', 'success', { value: nomenclaturasStr });
             
             // Notificar panel detectado
             if (urlInfo.panelOriginal) {
@@ -139,6 +141,9 @@ const chatObserver = {
   tagearMultiplesEnObservaciones(nomenclaturas, chatIndex, onComplete) {
     const self = this;
     const chatWindow = document.querySelector('.mui-npbckn');
+    
+    // Notificar que está tajeando
+    sendPopupEvent('tagearChat', 'action', { nomenclaturas: nomenclaturas.map(n => n.nomenclatura).join(', ') });
     
     const obsP = chatWindow && Array.from(chatWindow.querySelectorAll('p')).find(
       p => /Observaci[oó]n(es)?/i.test(p.textContent)
