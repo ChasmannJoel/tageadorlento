@@ -16,7 +16,7 @@ let PANELES_CONFIG = [
   {id: 27, nombres: ["Pruebagg"]},
   {id: 5, nombres: ["Trebol", "Treboldorado", "Treboldorado2"]},
   {id: 20, nombres: ["Cocan"]},
-  {id: 16, nombres: ["Scaloneta"]},
+  {id: 16, nombres: ["Escaloneta"]},
   {id: 32, nombres: ["Opulix"]},
   {id: 19, nombres: ["Denver"]},
   {id: 33, nombres: ["Godzilla"]},
